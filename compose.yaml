@@ -1,0 +1,35 @@
+services:
+  primary:
+    image: postgres:17
+    restart: unless-stopped
+    command: -c hba_file=/etc/postgresql/pg_hba.conf -c wal_level=replica -c max_wal_senders=10 -c max_replication_slots=10 -c log_statement=all
+    env_file: .env
+    ports:
+      - 5432:5432
+    volumes:
+      - ./primary/pg_hba.conf:/etc/postgresql/pg_hba.conf
+      - ./primary/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d:z
+    healthcheck:
+      test: pg_isready -d ${POSTGRES_DB} -U ${POSTGRES_USER} || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  replica:
+    image: postgres:17
+    restart: unless-stopped
+    entrypoint: /entrypoint.sh
+    env_file: .env
+    ports:
+      - 5433:5432
+    volumes:
+      - ./replica/pg_hba.conf:/etc/postgresql/pg_hba.conf
+      - ./replica/entrypoint.sh:/entrypoint.sh
+    healthcheck:
+      test: pg_isready -d ${POSTGRES_DB} -U ${POSTGRES_USER} || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      primary:
+        condition: service_healthy
